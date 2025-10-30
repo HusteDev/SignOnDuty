@@ -1,0 +1,22 @@
+.DS_Store
+node_modules
+build
+dist
+.env
+.env.local
+.env.*.local
+
+# pnpm
+pnpm-lock.yaml
+.pnpm-debug.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

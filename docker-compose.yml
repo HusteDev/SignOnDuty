@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: signonduty-db
+    environment:
+      POSTGRES_USER: signonduty
+      POSTGRES_PASSWORD: change_me_in_production
+      POSTGRES_DB: signonduty
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - signonduty
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U signonduty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signonduty-backend
+    environment:
+      DATABASE_URL: postgres://signonduty:change_me_in_production@postgres:5432/signonduty?sslmode=disable
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8443
+      TLS_CERT_FILE: /etc/signonduty/tls.crt
+      TLS_KEY_FILE: /etc/signonduty/tls.key
+      JWT_SECRET: change_me_in_production
+      ENVIRONMENT: production
+      ALLOWED_ORIGINS: https://localhost:3000
+    ports:
+      - "8443:8443"
+    networks:
+      - signonduty
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "https://localhost:8443/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: signonduty-frontend
+    environment:
+      ORIGIN: http://localhost:3000
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+      # Allow self-signed certificates in development
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    ports:
+      - "3000:3000"
+    networks:
+      - signonduty
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  signonduty:
+    driver: bridge
